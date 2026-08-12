@@ -1,0 +1,108 @@
+{{define "add.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Provider - provider-hub</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; line-height: 1.5; }
+    .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; color: #f0f6fc; }
+    .subtitle { color: #8b949e; font-size: 0.875rem; margin-bottom: 2rem; }
+    nav { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid #21262d; padding-bottom: 1rem; }
+    nav a { color: #58a6ff; text-decoration: none; font-size: 0.875rem; padding: 0.25rem 0.5rem; border-radius: 4px; }
+    nav a:hover { background: #161b22; }
+    .card { background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+    .card-title { font-weight: 600; color: #f0f6fc; font-size: 1rem; margin-bottom: 0.75rem; }
+    .form-group { margin-bottom: 1rem; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    label { display: block; font-size: 0.8125rem; color: #8b949e; margin-bottom: 0.25rem; }
+    input, textarea, select { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 0.5rem; border-radius: 4px; font-size: 0.875rem; width: 100%; font-family: inherit; }
+    input:focus, textarea:focus { outline: none; border-color: #58a6ff; }
+    textarea { min-height: 100px; font-family: monospace; }
+    .checkbox-group { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .checkbox-group label { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.875rem; color: #c9d1d9; }
+    .checkbox-group input[type="checkbox"] { width: auto; }
+    .actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+    .btn { display: inline-block; padding: 0.375rem 0.75rem; border-radius: 4px; font-size: 0.8125rem; text-decoration: none; cursor: pointer; border: 1px solid #21262d; background: #21262d; color: #c9d1d9; }
+    .btn:hover { background: #30363d; }
+    .btn-primary { background: #238636; border-color: #2ea043; color: #fff; }
+    .btn-primary:hover { background: #2ea043; }
+    .help { font-size: 0.75rem; color: #8b949e; margin-top: 0.25rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Add Provider</h1>
+    <p class="subtitle">Add a new LLM provider endpoint</p>
+    <nav>
+      <a href="/">providers</a>
+      <a href="/doctor">doctor</a>
+      <a href="/sync">sync</a>
+    </nav>
+
+    <form method="POST" action="/provider/add">
+      <div class="card">
+        <div class="card-title">Provider Info</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="id">Provider ID</label>
+            <input type="text" id="id" name="id" placeholder="e.g. agentrouter" required>
+            <div class="help">Unique identifier. Cannot be "openai", "ollama", or "lmstudio" (reserved by codex).</div>
+          </div>
+          <div class="form-group">
+            <label for="name">Display Name</label>
+            <input type="text" id="name" name="name" placeholder="e.g. AgentRouter" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="base_url">Base URL</label>
+            <input type="url" id="base_url" name="base_url" placeholder="https://api.example.com/v1" required>
+          </div>
+          <div class="form-group">
+            <label for="api_key_env">API Key Env Var</label>
+            <input type="text" id="api_key_env" name="api_key_env" placeholder="MY_API_KEY">
+            <div class="help">Environment variable name (not the actual key).</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="protocols">Protocols (comma-separated)</label>
+          <input type="text" id="protocols" name="protocols" placeholder="anthropic, openai">
+          <div class="help">Which wire APIs this endpoint supports. "anthropic" = Anthropic Messages API, "openai" = OpenAI Chat Completions / Responses.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Deploy to Tools</div>
+        <div class="checkbox-group">
+          <label><input type="checkbox" name="tool_codex" checked> codex</label>
+          <label><input type="checkbox" name="tool_pi" checked> pi</label>
+          <label><input type="checkbox" name="tool_opencode" checked> opencode</label>
+          <label><input type="checkbox" name="tool_hermes" checked> hermes</label>
+        </div>
+        <div class="help" style="margin-top: 0.5rem;">Uncheck a tool to skip this provider during sync.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Models</div>
+        <div class="form-group">
+          <label for="models">Model List (one per line, format: id | name)</label>
+          <textarea id="models" name="models" placeholder="claude-opus-5 | Claude Opus 5
+gpt-5.4 | GPT 5.4"></textarea>
+          <div class="help">Pipe-separated. ID is the model identifier sent to the API; name is the display label.</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">Save Provider</button>
+        <a href="/" class="btn">Cancel</a>
+      </div>
+    </form>
+  </div>
+</body>
+</html>
+{{end}}

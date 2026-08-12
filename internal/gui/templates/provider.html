@@ -1,0 +1,108 @@
+{{define "provider.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Provider.Name}} - provider-hub</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; line-height: 1.5; }
+    .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; color: #f0f6fc; }
+    .subtitle { color: #8b949e; font-size: 0.875rem; margin-bottom: 2rem; }
+    nav { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid #21262d; padding-bottom: 1rem; }
+    nav a { color: #58a6ff; text-decoration: none; font-size: 0.875rem; padding: 0.25rem 0.5rem; border-radius: 4px; }
+    nav a:hover { background: #161b22; }
+    .card { background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+    .card-title { font-weight: 600; color: #f0f6fc; font-size: 1rem; margin-bottom: 0.75rem; }
+    .card-detail { font-size: 0.8125rem; color: #8b949e; margin-bottom: 0.25rem; }
+    .badge { display: inline-block; font-size: 0.6875rem; padding: 0.125rem 0.5rem; border-radius: 10px; margin-right: 0.25rem; }
+    .badge-on { background: #1a3a2a; color: #3fb950; border: 1px solid #238636; }
+    .badge-off { background: #3d1a1a; color: #f85149; border: 1px solid #da3633; }
+    .badge-proto { background: #1a2a3a; color: #58a6ff; border: 1px solid #1f6feb; }
+    .actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+    .btn { display: inline-block; padding: 0.375rem 0.75rem; border-radius: 4px; font-size: 0.8125rem; text-decoration: none; cursor: pointer; border: 1px solid #21262d; background: #21262d; color: #c9d1d9; }
+    .btn:hover { background: #30363d; }
+    .btn-primary { background: #238636; border-color: #2ea043; color: #fff; }
+    .btn-primary:hover { background: #2ea043; }
+    .code-block { background: #0d1117; border: 1px solid #21262d; border-radius: 4px; padding: 1rem; font-family: monospace; font-size: 0.8125rem; white-space: pre-wrap; overflow-x: auto; color: #c9d1d9; margin-top: 1rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; margin-top: 0.75rem; }
+    th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #21262d; }
+    th { color: #8b949e; font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+    code { background: #21262d; padding: 0.125rem 0.375rem; border-radius: 3px; font-size: 0.8125rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>{{.Provider.Name}}</h1>
+    <p class="subtitle">{{.Provider.ID}}</p>
+    <nav>
+      <a href="/">providers</a>
+      <a href="/doctor">doctor</a>
+      <a href="/sync">sync</a>
+    </nav>
+
+    <div class="card">
+      <div class="card-title">Provider Details</div>
+      <div class="card-detail"><strong>Base URL:</strong> <code>{{.Provider.BaseURL}}</code></div>
+      <div class="card-detail"><strong>API Key Env:</strong> <code>{{.Provider.APIKeyEnv}}</code></div>
+      <div class="card-detail">
+        <strong>Protocols:</strong>
+        {{range .Provider.Protocols}}<span class="badge badge-proto">{{.}}</span>{{end}}
+      </div>
+      {{if .Provider.Headers}}
+      <div class="card-detail"><strong>Headers:</strong></div>
+      <div class="code-block">{{range $k, $v := .Provider.Headers}}{{$k}}: {{$v}}
+{{end}}</div>
+      {{end}}
+    </div>
+
+    <div class="card">
+      <div class="card-title">Tool Deploy</div>
+      <div class="card-detail">
+        <strong>codex:</strong> {{if index .Provider.Tools "codex"}}{{if (index .Provider.Tools "codex").Enabled}}<span class="badge badge-on">enabled</span>{{else}}<span class="badge badge-off">disabled</span>{{end}}{{else}}<span class="badge badge-on">enabled (default)</span>{{end}}
+      </div>
+      <div class="card-detail">
+        <strong>pi:</strong> {{if index .Provider.Tools "pi"}}{{if (index .Provider.Tools "pi").Enabled}}<span class="badge badge-on">enabled</span>{{else}}<span class="badge badge-off">disabled</span>{{end}}{{else}}<span class="badge badge-on">enabled (default)</span>{{end}}
+      </div>
+      <div class="card-detail">
+        <strong>opencode:</strong> {{if index .Provider.Tools "opencode"}}{{if (index .Provider.Tools "opencode").Enabled}}<span class="badge badge-on">enabled</span>{{else}}<span class="badge badge-off">disabled</span>{{end}}{{else}}<span class="badge badge-on">enabled (default)</span>{{end}}
+      </div>
+      <div class="card-detail">
+        <strong>hermes:</strong> {{if index .Provider.Tools "hermes"}}{{if (index .Provider.Tools "hermes").Enabled}}<span class="badge badge-on">enabled</span>{{else}}<span class="badge badge-off">disabled</span>{{end}}{{else}}<span class="badge badge-on">enabled (default)</span>{{end}}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Models ({{len .Provider.Models}})</div>
+      {{if .Provider.Models}}
+      <table>
+        <tr><th>ID</th><th>Name</th><th>Context</th><th>Max Output</th><th>Reasoning</th></tr>
+        {{range .Provider.Models}}
+        <tr>
+          <td><code>{{.ID}}</code></td>
+          <td>{{.Name}}</td>
+          <td>{{.ContextWindow}}</td>
+          <td>{{.MaxOutput}}</td>
+          <td>{{if .Reasoning}}yes{{else}}no{{end}}</td>
+        </tr>
+        {{end}}
+      </table>
+      {{else}}
+      <div class="card-detail">No models defined.</div>
+      {{end}}
+    </div>
+
+    <div class="actions">
+      <a href="/" class="btn">back</a>
+      <a href="/sync?tool=opencode" class="btn" hx-get="/sync/preview?tool=opencode" hx-target="#preview" hx-swap="innerHTML">preview opencode</a>
+      <a href="/sync?tool=hermes" class="btn" hx-get="/sync/preview?tool=hermes" hx-target="#preview" hx-swap="innerHTML">preview hermes</a>
+    </div>
+
+    <div id="preview" class="code-block" style="margin-top: 1rem; display: none;"></div>
+  </div>
+</body>
+</html>
+{{end}}
