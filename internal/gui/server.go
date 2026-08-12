@@ -57,6 +57,7 @@ func Serve() error {
 	mux.HandleFunc("/sync/preview", handleSyncPreview)
 	mux.HandleFunc("/doctor", handleDoctor)
 	mux.HandleFunc("/import", handleImport)
+	mux.HandleFunc("/agents-md", handleAgentsMD)
 
 	url := "http://localhost" + addr
 	fmt.Printf("Starting provider-hub GUI at %s\n", url)
@@ -90,7 +91,7 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	type providerView struct {
 		schema.Provider
-		Compat   map[string]bool
+		Compat    map[string]bool
 		CompatMsg map[string]string
 	}
 
@@ -330,10 +331,10 @@ func handleSyncPreview(w http.ResponseWriter, r *http.Request) {
 
 func handleDoctor(w http.ResponseWriter, r *http.Request) {
 	type checkResult struct {
-		Name     string
-		Path     string
-		OK       bool
-		Error    string
+		Name      string
+		Path      string
+		OK        bool
+		Error     string
 		Providers []string
 	}
 
@@ -395,6 +396,33 @@ func handleImport(w http.ResponseWriter, r *http.Request) {
 	// POST: run import
 	// For now, just redirect to doctor
 	http.Redirect(w, r, "/doctor", http.StatusSeeOther)
+}
+
+// handleAgentsMD serves a markdown summary of all configured providers.
+func handleAgentsMD(w http.ResponseWriter, r *http.Request) {
+	cfg, err := config.Load()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString("# Provider Agents\n\n")
+	sb.WriteString("| ID | Name | Base URL | API Key Env | Tools |\n")
+	sb.WriteString("|----|------|----------|-------------|-------|\n")
+	for _, p := range cfg.Providers {
+		var tools []string
+		for name, t := range p.Tools {
+			if t.Enabled {
+				tools = append(tools, name)
+			}
+		}
+		sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s |\n",
+			p.ID, p.Name, p.BaseURL, p.APIKeyEnv, strings.Join(tools, ", ")))
+	}
+
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	fmt.Fprint(w, sb.String())
 }
 
 // ConfigDir returns the path for a tool's config.

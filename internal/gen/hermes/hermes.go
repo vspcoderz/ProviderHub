@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/vspcoderz/provider-hub/internal/keystore"
 	"github.com/vspcoderz/provider-hub/internal/schema"
 	"github.com/vspcoderz/provider-hub/internal/sync"
 	"gopkg.in/yaml.v3"
@@ -85,6 +86,13 @@ func Generate(cfg *schema.Config, dryRun bool) (string, string, error) {
 			APIMode: resolveAPIMode(p),
 		}
 
+		// Check keystore for stored key
+		if storedKey, _ := keystore.Get(p.ID); storedKey != "" {
+			prov.KeyEnv = "" // don't reference env var if we have the key
+			// Write key to hermes .env file
+			writeHermesEnv(p.ID, storedKey)
+		}
+
 		if len(p.Models) > 0 {
 			// Set default model to first model
 			prov.DefaultModel = p.Models[0].ID
@@ -102,10 +110,10 @@ func Generate(cfg *schema.Config, dryRun bool) (string, string, error) {
 
 	raw["providers"] = providers
 
-	// Update model.provider to first enabled provider if only one
+	// Update model.provider to first enabled provider if only one and a model exists
 	if len(cfg.Providers) == 1 {
 		p := cfg.Providers[0]
-		if isEnabled(p, "hermes") {
+		if isEnabled(p, "hermes") && len(p.Models) > 0 {
 			raw["model"] = map[string]interface{}{
 				"default":  p.Models[0].ID,
 				"provider": "custom:" + p.ID,
@@ -313,4 +321,37 @@ func EnsureCustomProvider(providerID string) error {
 	replaced := re.ReplaceAll(data, nil)
 
 	return os.WriteFile(path, replaced, 0o644)
+}
+
+// writeHermesEnv writes or updates an API key in ~/.hermes/.env
+func writeHermesEnv(providerID, key string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	envPath := filepath.Join(home, ".hermes", ".env")
+
+	// Read existing
+	data, _ := os.ReadFile(envPath)
+	content := string(data)
+
+	// Build env var name (uppercase, underscore-separated)
+	envVar := strings.ToUpper(providerID) + "_API_KEY"
+	line := envVar + "=" + key
+
+	// Check if already exists
+	lines := strings.Split(content, "\n")
+	found := false
+	for i, l := range lines {
+		if strings.HasPrefix(l, envVar+"=") {
+			lines[i] = line
+			found = true
+			break
+		}
+	}
+	if !found {
+		lines = append(lines, line)
+	}
+
+	os.WriteFile(envPath, []byte(strings.Join(lines, "\n")), 0o600)
 }

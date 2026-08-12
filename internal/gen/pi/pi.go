@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/vspcoderz/provider-hub/internal/keystore"
 	"github.com/vspcoderz/provider-hub/internal/schema"
 	"github.com/vspcoderz/provider-hub/internal/sync"
 )
@@ -93,7 +94,12 @@ func Generate(cfg *schema.Config, dryRun bool) (string, string, error) {
 		}
 
 		if p.APIKeyEnv != "" {
-			piProv.APIKey = "$" + p.APIKeyEnv
+			// Check keystore first, fall back to env var
+			if storedKey, _ := keystore.Get(p.ID); storedKey != "" {
+				piProv.APIKey = storedKey
+			} else {
+				piProv.APIKey = "$" + p.APIKeyEnv
+			}
 		}
 		if len(p.Headers) > 0 {
 			piProv.Headers = p.Headers
@@ -123,6 +129,9 @@ func Generate(cfg *schema.Config, dryRun bool) (string, string, error) {
 			piProv.Models = append(piProv.Models, pm)
 		}
 
+		if len(piProv.Models) == 0 {
+			piProv.Models = []piModel{}
+		}
 		existing.Providers[p.ID] = piProv
 	}
 

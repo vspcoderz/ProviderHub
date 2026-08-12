@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/vspcoderz/provider-hub/internal/keystore"
 	"github.com/vspcoderz/provider-hub/internal/schema"
 	"github.com/vspcoderz/provider-hub/internal/sync"
 )
@@ -97,7 +98,12 @@ func Generate(cfg *schema.Config, dryRun bool) (string, string, error) {
 		}
 
 		if p.APIKeyEnv != "" {
-			prov.Options.APIKey = "{env:" + p.APIKeyEnv + "}"
+			// Check keystore first, fall back to env var
+			if storedKey, _ := keystore.Get(p.ID); storedKey != "" {
+				prov.Options.APIKey = storedKey
+			} else {
+				prov.Options.APIKey = "{env:" + p.APIKeyEnv + "}"
+			}
 		}
 
 		prov.Models = map[string]ocModel{}

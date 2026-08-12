@@ -10,14 +10,15 @@ type Config struct {
 
 // Provider describes one custom provider endpoint.
 type Provider struct {
-	ID         string            `yaml:"id"`
-	Name       string            `yaml:"name"`
-	BaseURL    string            `yaml:"baseUrl"`
-	APIKeyEnv  string            `yaml:"apiKeyEnv,omitempty"`
-	Protocols  []string          `yaml:"protocols,omitempty"`  // "anthropic", "openai"
-	Headers    map[string]string `yaml:"headers,omitempty"`
-	Tools      map[string]Tool   `yaml:"tools,omitempty"`
-	Models     []Model           `yaml:"models"`
+	ID                string            `yaml:"id"`
+	Name              string            `yaml:"name"`
+	BaseURL           string            `yaml:"baseUrl"`
+	APIKeyEnv         string            `yaml:"apiKeyEnv,omitempty"`
+	Protocols         []string          `yaml:"protocols,omitempty"`  // "anthropic", "openai"
+	Headers           map[string]string `yaml:"headers,omitempty"`
+	Tools             map[string]Tool   `yaml:"tools,omitempty"`
+	Models            []Model           `yaml:"models"`
+	SystemPrompt      string            `yaml:"systemPrompt,omitempty"` // system prompt / agent memory
 }
 
 // Tool configures how a provider is deployed to a specific tool.
