@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/vspcoderz/provider-hub/internal/config"
@@ -17,6 +19,8 @@ import (
 	"github.com/vspcoderz/provider-hub/internal/gen/opencode"
 	"github.com/vspcoderz/provider-hub/internal/gen/pi"
 	"github.com/vspcoderz/provider-hub/internal/schema"
+	"github.com/vspcoderz/provider-hub/internal/skill"
+	"github.com/vspcoderz/provider-hub/internal/system"
 )
 
 //go:embed templates/*.html
@@ -52,12 +56,19 @@ func Serve() error {
 	mux.HandleFunc("/", handleIndex)
 	mux.HandleFunc("/provider/", handleProvider)
 	mux.HandleFunc("/provider/add", handleProviderAdd)
+	mux.HandleFunc("/provider/edit", handleProviderEdit)
 	mux.HandleFunc("/provider/delete", handleProviderDelete)
 	mux.HandleFunc("/sync", handleSync)
 	mux.HandleFunc("/sync/preview", handleSyncPreview)
 	mux.HandleFunc("/doctor", handleDoctor)
 	mux.HandleFunc("/import", handleImport)
 	mux.HandleFunc("/agents-md", handleAgentsMD)
+	mux.HandleFunc("/skills", handleSkills)
+	mux.HandleFunc("/skills/save", handleSkillSave)
+	mux.HandleFunc("/skills/delete", handleSkillDelete)
+	mux.HandleFunc("/system", handleSystem)
+	mux.HandleFunc("/system/save", handleSystemSave)
+	mux.HandleFunc("/system/delete", handleSystemDelete)
 
 	url := "http://localhost" + addr
 	fmt.Printf("Starting provider-hub GUI at %s\n", url)
@@ -147,9 +158,75 @@ func handleProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render(w, "provider.html", map[string]interface{}{
-		"Provider": p,
+	render(w, "edit.html", map[string]interface{}{
+		"Provider":   p,
+		"Protocols":  strings.Join(p.Protocols, ", "),
+		"ModelsText": modelsToText(p.Models),
+		"ToolCodex":  toolEnabled(p, "codex"),
+		"ToolPi":     toolEnabled(p, "pi"),
+		"ToolOpen":   toolEnabled(p, "opencode"),
+		"ToolHermes": toolEnabled(p, "hermes"),
 	})
+}
+
+func handleProviderEdit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", 405)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	id := r.FormValue("id")
+	if id == "" {
+		http.Error(w, "missing id", 400)
+		return
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	existing := config.FindProvider(cfg, id)
+	if existing == nil {
+		http.Error(w, "Provider not found", 404)
+		return
+	}
+
+	var protocols []string
+	if proto := r.FormValue("protocols"); proto != "" {
+		for _, p := range strings.Split(proto, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				protocols = append(protocols, p)
+			}
+		}
+	}
+
+	provider := schema.Provider{
+		ID:        id,
+		Name:      r.FormValue("name"),
+		BaseURL:   r.FormValue("base_url"),
+		APIKeyEnv: r.FormValue("api_key_env"),
+		Protocols: protocols,
+		Headers:   existing.Headers,
+		Tools:     map[string]schema.Tool{},
+		Models:    parseModelsText(r.FormValue("models")),
+	}
+	for _, tool := range []string{"codex", "pi", "opencode", "hermes"} {
+		provider.Tools[tool] = schema.Tool{Enabled: r.FormValue("tool_"+tool) == "on"}
+	}
+
+	config.UpsertProvider(cfg, provider)
+	if err := config.Save(cfg); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func handleProviderAdd(w http.ResponseWriter, r *http.Request) {
@@ -439,4 +516,168 @@ func configDir(tool string) string {
 		return filepath.Join(home, ".hermes")
 	}
 	return ""
+}
+
+// --- model text helpers ---
+
+func modelsToText(models []schema.Model) string {
+	var sb strings.Builder
+	for _, m := range models {
+		name := m.Name
+		if name == "" {
+			name = m.ID
+		}
+		sb.WriteString(fmt.Sprintf("%s | %s", m.ID, name))
+		if m.ContextWindow > 0 || m.MaxOutput > 0 {
+			sb.WriteString(fmt.Sprintf(" | %d | %d", m.ContextWindow, m.MaxOutput))
+		}
+		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
+func parseModelsText(s string) []schema.Model {
+	var models []schema.Model
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, "|")
+		m := schema.Model{ID: strings.TrimSpace(parts[0])}
+		m.Name = m.ID
+		if len(parts) > 1 && strings.TrimSpace(parts[1]) != "" {
+			m.Name = strings.TrimSpace(parts[1])
+		}
+		if len(parts) > 2 {
+			if n, err := strconv.Atoi(strings.TrimSpace(parts[2])); err == nil {
+				m.ContextWindow = n
+			}
+		}
+		if len(parts) > 3 {
+			if n, err := strconv.Atoi(strings.TrimSpace(parts[3])); err == nil {
+				m.MaxOutput = n
+			}
+		}
+		models = append(models, m)
+	}
+	return models
+}
+
+func toolEnabled(p *schema.Provider, name string) bool {
+	if p.Tools == nil {
+		return true
+	}
+	t, ok := p.Tools[name]
+	if !ok {
+		return true
+	}
+	return t.Enabled
+}
+
+// --- skills ---
+
+type kvItem struct {
+	Key   string
+	Value string
+}
+
+func handleSkills(w http.ResponseWriter, r *http.Request) {
+	skills, err := skill.List()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	items := make([]kvItem, 0, len(skills))
+	for k, v := range skills {
+		items = append(items, kvItem{Key: k, Value: v})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
+	render(w, "skills.html", map[string]interface{}{"Items": items})
+}
+
+func handleSkillSave(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", 405)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	body := r.FormValue("body")
+	if name == "" || body == "" {
+		http.Error(w, "name and body are required", 400)
+		return
+	}
+	if err := skill.Set(name, body); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	http.Redirect(w, r, "/skills", http.StatusSeeOther)
+}
+
+func handleSkillDelete(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		http.Error(w, "missing name", 400)
+		return
+	}
+	if err := skill.Remove(name); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	http.Redirect(w, r, "/skills", http.StatusSeeOther)
+}
+
+// --- system prompts ---
+
+func handleSystem(w http.ResponseWriter, r *http.Request) {
+	prompts, err := system.ListSystemPrompts()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	items := make([]kvItem, 0, len(prompts))
+	for k, v := range prompts {
+		items = append(items, kvItem{Key: k, Value: v})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
+	render(w, "system.html", map[string]interface{}{"Items": items})
+}
+
+func handleSystemSave(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", 405)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	id := strings.TrimSpace(r.FormValue("id"))
+	prompt := r.FormValue("prompt")
+	if id == "" || prompt == "" {
+		http.Error(w, "id and prompt are required", 400)
+		return
+	}
+	if err := system.SetSystemPrompt(id, prompt); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	http.Redirect(w, r, "/system", http.StatusSeeOther)
+}
+
+func handleSystemDelete(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "missing id", 400)
+		return
+	}
+	if err := system.RemoveSystemPrompt(id); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	http.Redirect(w, r, "/system", http.StatusSeeOther)
 }

@@ -1,0 +1,78 @@
+{{define "skills.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skills - provider-hub</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; line-height: 1.5; }
+    .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; color: #f0f6fc; }
+    .subtitle { color: #8b949e; font-size: 0.875rem; margin-bottom: 2rem; }
+    nav { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid #21262d; padding-bottom: 1rem; }
+    nav a { color: #58a6ff; text-decoration: none; font-size: 0.875rem; padding: 0.25rem 0.5rem; border-radius: 4px; }
+    nav a:hover { background: #161b22; }
+    .card { background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .card-title { font-weight: 600; color: #f0f6fc; font-size: 1rem; }
+    .form-group { margin-bottom: 1rem; }
+    label { display: block; font-size: 0.8125rem; color: #8b949e; margin-bottom: 0.25rem; }
+    input, textarea { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 0.5rem; border-radius: 4px; font-size: 0.875rem; width: 100%; font-family: inherit; }
+    input:focus, textarea:focus { outline: none; border-color: #58a6ff; }
+    textarea { min-height: 120px; font-family: monospace; }
+    .btn { display: inline-block; padding: 0.375rem 0.75rem; border-radius: 4px; font-size: 0.8125rem; text-decoration: none; cursor: pointer; border: 1px solid #21262d; background: #21262d; color: #c9d1d9; }
+    .btn:hover { background: #30363d; }
+    .btn-primary { background: #238636; border-color: #2ea043; color: #fff; }
+    .btn-danger { background: #da3633; border-color: #f85149; color: #fff; }
+    .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+    .code-block { background: #0d1117; border: 1px solid #21262d; border-radius: 4px; padding: 0.75rem; font-family: monospace; font-size: 0.8125rem; white-space: pre-wrap; overflow-x: auto; }
+    .empty { text-align: center; padding: 2rem; color: #8b949e; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Skills</h1>
+    <p class="subtitle">named reusable skill snippets</p>
+    <nav>
+      <a href="/">providers</a>
+      <a href="/skills">skills</a>
+      <a href="/system">system prompts</a>
+      <a href="/doctor">doctor</a>
+      <a href="/sync">sync</a>
+    </nav>
+
+    <div class="card">
+      <div class="card-title">Add / Update Skill</div>
+      <form method="POST" action="/skills/save">
+        <div class="form-group">
+          <label for="name">Name</label>
+          <input type="text" id="name" name="name" placeholder="e.g. code-review" required>
+        </div>
+        <div class="form-group">
+          <label for="body">Body</label>
+          <textarea id="body" name="body" placeholder="Skill content..." required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Save Skill</button>
+      </form>
+    </div>
+
+    {{if .Items}}
+    {{range .Items}}
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">{{.Key}}</span>
+        <a href="/skills/delete?name={{.Key}}" class="btn btn-sm btn-danger"
+           onclick="return confirm('Delete skill {{.Key}}?')">delete</a>
+      </div>
+      <div class="code-block">{{.Value}}</div>
+    </div>
+    {{end}}
+    {{else}}
+    <div class="empty">No skills yet. Add one above.</div>
+    {{end}}
+  </div>
+</body>
+</html>
+{{end}}
