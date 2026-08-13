@@ -28,6 +28,35 @@ ph key list              # List all stored keys
 ph key rm <id>           # Remove stored key
 ```
 
+## Harness wrappers (hsi)
+
+`ph hsi` generates thin wrapper binaries (`ph-claude`, `ph-codex`, `ph-pi`, `ph-opencode`)
+that run a harness with the provider-hub routers injected, while leaving the
+harness's own config untouched. Run the wrapper for router-backed sessions, or
+the plain binary for normal usage.
+
+```bash
+ph hsi setup              # write wrappers to ~/.local/bin
+ph hsi list               # show per-harness defaults + binaries
+ph hsi set claude --provider agentrouter --model claude-opus-5
+ph hsi set codex --provider gorouter --model claude-opus-4-8
+ph hsi run opencode --provider agentrouter --model claude-opus-5 -- <args>   # bypass wrapper
+ph hsi rm [<tool>]        # remove wrapper(s)
+```
+
+- Per-harness defaults live in `~/.config/provider-hub/hsi.yaml`.
+- Override any run with `PH_PROVIDER`/`PH_MODEL` env vars, or `--provider/--model` before `--`.
+- Isolation mechanism per harness:
+  - **claude** → `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL` env
+  - **codex** → runs a local Responses→ChatCompletions translation proxy
+  (`~/.cache/provider-hub/hsi/proxy/`) and overlays `base_url`, `wire_api`,
+  `model_provider`, `model`, and `model_catalog_json` via `-c` on the real
+  `~/.codex/config.toml` (keeps trust/permissions intact). The proxy is
+  auto-started per run and torn down afterwards; deps install once via `uv`.
+  - **pi** → fresh `PI_CODING_AGENT_DIR` dir with a generated `models.json`
+  - **opencode** → fresh `OPENCODE_CONFIG` json file
+- Isolated configs are written fresh per run to `~/.cache/provider-hub/hsi/<tool>/` (0700).
+
 ## Canonical config format
 
 ```yaml
@@ -57,10 +86,22 @@ providers:
 
 ## Provider compatibility
 
-- **codex** only supports `openai` protocol (Responses API). Anthropic-only providers are flagged incompatible.
+- **codex** only supports `openai` protocol (Responses API). Codex 0.122+ hard-requires `wire_api =
+  "responses"`. Routers that only speak Chat Completions (new-api gateways like agentrouter) are made
+  usable by `ph-codex`'s local translation proxy (`internal/hsi/api2codex.py`, vendored MIT), which
+  converts Responses→ChatCompletions and forwards the provider's `headers` (e.g. the claude UA) upstream.
+  Requires `uv` for the one-time venv setup (fastapi/uvicorn/httpx).
 - **hermes** supports `anthropic_messages`, `chat_completions`, `codex_responses` api modes.
 - **opencode** uses npm packages: `@ai-sdk/anthropic`, `@ai-sdk/openai-compatible`, `@ai-sdk/openai`.
-- **pi** uses `openai-completions`, `openai-responses`, or `anthropic-messages`.
+- **pi** uses `openai-completions`, `openai-responses`, or `anthropic-messages`. For `anthropic-messages`,
+  pi appends `/v1/messages` itself, so a canonical `baseUrl` ending in `/v1` is stripped automatically.
+- **claude** (Claude Code) is env-driven: `ANTHROPIC_BASE_URL` (trailing `/v1` stripped, Claude appends
+  `/v1/messages`), `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL`, `ANTHROPIC_SMALL_FAST_MODEL`.
+  `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1` is set so the `/model` picker lists gateway models
+  from the provider's `/v1/models` (opt-in since Claude Code 2.1.129).
+- **headers** from `providers.yaml` propagate to codex (`http_headers`), pi (`headers`), opencode
+  (`options.headers`), and hermes (`extra_headers`). Cloudflare-gated routers (gorouter, agentrouter) require
+  `headers: {User-Agent: "claude-cli/2.1.0 (external, cli)"}` to pass their client gate.
 
 ## API keys
 

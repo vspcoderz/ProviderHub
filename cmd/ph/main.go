@@ -18,6 +18,7 @@ import (
 	"github.com/vspcoderz/provider-hub/internal/gen/opencode"
 	"github.com/vspcoderz/provider-hub/internal/gen/pi"
 	"github.com/vspcoderz/provider-hub/internal/gui"
+	"github.com/vspcoderz/provider-hub/internal/hsi"
 	"github.com/vspcoderz/provider-hub/internal/keystore"
 	"github.com/vspcoderz/provider-hub/internal/schema"
 	"github.com/vspcoderz/provider-hub/internal/skill"
@@ -56,13 +57,15 @@ func main() {
 		cmdAgent(args)
 	case "skill":
 		cmdSkill(args)
+	case "hsi":
+		cmdHsi(args)
 	case "agents-md":
 		cmdAgentsMd(args)
 	case "help", "--help", "-h":
 		printUsage()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", cmd)
-		fmt.Fprintln(os.Stderr, "Available: list, add, sync, doctor, check, import, serve, key, system, agent, skill, agents-md, help")
+		fmt.Fprintln(os.Stderr, "Available: list, add, sync, doctor, check, import, serve, key, system, agent, skill, hsi, agents-md, help")
 		os.Exit(1)
 	}
 }
@@ -86,6 +89,13 @@ Usage:
   ph agent set <id>    Manage per-provider agent memory (set|show|list|rm)
   ph skill add <name>  Manage skills (add|show|list|rm)
   ph agents-md         Generate AGENTS.md
+  ph hsi list          Show harness wrapper defaults
+  ph hsi set <tool> --provider <id> [--model <id>]
+                       Set default provider/model for a harness wrapper
+  ph hsi setup         Write ph-claude, ph-codex, ph-pi, ph-opencode wrappers
+  ph hsi run <tool> [--provider <id>] [--model <id>] [--] <args>
+                       Run a harness with router providers injected (used by wrappers)
+  ph hsi rm [<tool>]   Remove wrapper scripts
 
 Flags:
   --dry-run            Show what would be written without writing
@@ -762,6 +772,96 @@ func cmdSkill(args []string) {
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown subcommand: skill %s\n", sub)
 		fmt.Fprintln(os.Stderr, "Available: add, show, list, rm")
+		os.Exit(1)
+	}
+}
+
+// cmdHsi manages the harness-specific integration wrappers.
+func cmdHsi(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: ph hsi <list|set|setup|run|rm> [tool]")
+		os.Exit(1)
+	}
+
+	sub := args[0]
+	subArgs := args[1:]
+
+	switch sub {
+	case "list":
+		if err := hsi.List(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+	case "set":
+		if len(subArgs) == 0 {
+			fmt.Fprintln(os.Stderr, "Usage: ph hsi set <tool> --provider <id> [--model <id>]")
+			os.Exit(1)
+		}
+		tool := subArgs[0]
+		provider, model := "", ""
+		for i := 1; i < len(subArgs); i++ {
+			switch subArgs[i] {
+			case "--provider":
+				if i+1 < len(subArgs) {
+					provider = subArgs[i+1]
+					i++
+				}
+			case "--model":
+				if i+1 < len(subArgs) {
+					model = subArgs[i+1]
+					i++
+				}
+			}
+		}
+		if err := hsi.Set(tool, provider, model); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("ph-%s default: %s/%s\n", tool, provider, model)
+
+	case "setup":
+		dir := ""
+		for i := 0; i < len(subArgs); i++ {
+			if subArgs[i] == "--dir" && i+1 < len(subArgs) {
+				dir = subArgs[i+1]
+				i++
+			}
+		}
+		fmt.Println("Writing harness wrappers:")
+		if err := hsi.Setup(dir); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Done. Run e.g. 'ph-claude' to use your router providers, or 'claude' normally.")
+
+	case "run":
+		if len(subArgs) == 0 {
+			fmt.Fprintln(os.Stderr, "Usage: ph hsi run <tool> [--provider <id>] [--model <id>] [--] <args>")
+			os.Exit(1)
+		}
+		tool := subArgs[0]
+		if err := hsi.Run(tool, subArgs[1:]); err != nil {
+			if ee, ok := err.(*hsi.ExitError); ok {
+				os.Exit(ee.Code)
+			}
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+	case "rm":
+		name := ""
+		if len(subArgs) > 0 {
+			name = subArgs[0]
+		}
+		if err := hsi.Remove(name, ""); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown hsi subcommand: %s\n", sub)
+		fmt.Fprintln(os.Stderr, "Available: list, set, setup, run, rm")
 		os.Exit(1)
 	}
 }

@@ -78,61 +78,7 @@ func Generate(cfg *schema.Config, dryRun bool) (string, string, error) {
 			continue
 		}
 
-		// Determine API type from protocols
-		api := "openai-completions"
-		if hasProtocol(p, "anthropic") && !hasProtocol(p, "openai") {
-			api = "anthropic-messages"
-		} else if hasProtocol(p, "openai") {
-			// Check if responses API is available
-			api = "openai-completions"
-		}
-
-		piProv := piProvider{
-			Name:    p.Name,
-			BaseURL: p.BaseURL,
-			API:     api,
-		}
-
-		if p.APIKeyEnv != "" {
-			// Check keystore first, fall back to env var
-			if storedKey, _ := keystore.Get(p.ID); storedKey != "" {
-				piProv.APIKey = storedKey
-			} else {
-				piProv.APIKey = "$" + p.APIKeyEnv
-			}
-		}
-		if len(p.Headers) > 0 {
-			piProv.Headers = p.Headers
-		}
-
-		for _, m := range p.Models {
-			pm := piModel{
-				ID:            m.ID,
-				Name:          m.Name,
-				Reasoning:     m.Reasoning,
-				Input:         []string{"text"},
-				ContextWindow: m.ContextWindow,
-				MaxTokens:     m.MaxOutput,
-			}
-			if m.Cost != nil {
-				pm.Cost = piModelCost{
-					Input:      m.Cost.Input,
-					Output:     m.Cost.Output,
-					CacheRead:  m.Cost.CacheRead,
-					CacheWrite: m.Cost.CacheWrite,
-				}
-			}
-			// Add image input for openai models
-			if hasProtocol(p, "openai") {
-				pm.Input = append(pm.Input, "image")
-			}
-			piProv.Models = append(piProv.Models, pm)
-		}
-
-		if len(piProv.Models) == 0 {
-			piProv.Models = []piModel{}
-		}
-		existing.Providers[p.ID] = piProv
+		existing.Providers[p.ID] = BuildProvider(p)
 	}
 
 	data, err := json.MarshalIndent(existing, "", "  ")
@@ -155,6 +101,83 @@ func Generate(cfg *schema.Config, dryRun bool) (string, string, error) {
 	}
 
 	return path, string(data), nil
+}
+
+// BuildProvider returns the pi models.json provider entry for a provider.
+func BuildProvider(p schema.Provider) piProvider {
+	api := "openai-completions"
+	if hasProtocol(p, "anthropic") && !hasProtocol(p, "openai") {
+		api = "anthropic-messages"
+	}
+
+	piProv := piProvider{
+		Name:    p.Name,
+		BaseURL: p.BaseURL,
+		API:     api,
+	}
+
+	// pi appends "/v1/messages" for anthropic providers; strip a "/v1" that
+	// the canonical base already carries so we don't build "/v1/v1/messages".
+	if api == "anthropic-messages" {
+		piProv.BaseURL = schema.AnthropicBase(p.BaseURL)
+	}
+
+	if p.APIKeyEnv != "" {
+		if storedKey, _ := keystore.Get(p.ID); storedKey != "" {
+			piProv.APIKey = storedKey
+		} else {
+			piProv.APIKey = "$" + p.APIKeyEnv
+		}
+	}
+	if len(p.Headers) > 0 {
+		piProv.Headers = p.Headers
+	}
+
+	for _, m := range p.Models {
+		pm := piModel{
+			ID:            m.ID,
+			Name:          m.Name,
+			Reasoning:     m.Reasoning,
+			Input:         []string{"text"},
+			ContextWindow: m.ContextWindow,
+			MaxTokens:     m.MaxOutput,
+		}
+		if m.Cost != nil {
+			pm.Cost = piModelCost{
+				Input:      m.Cost.Input,
+				Output:     m.Cost.Output,
+				CacheRead:  m.Cost.CacheRead,
+				CacheWrite: m.Cost.CacheWrite,
+			}
+		}
+		if hasProtocol(p, "openai") {
+			pm.Input = append(pm.Input, "image")
+		}
+		piProv.Models = append(piProv.Models, pm)
+	}
+
+	if len(piProv.Models) == 0 {
+		piProv.Models = []piModel{}
+	}
+	return piProv
+}
+
+// FreshConfig returns a standalone models.json containing every pi-enabled
+// provider. Used by the hsi harness wrapper so the real ~/.pi config stays
+// untouched.
+func FreshConfig(cfg *schema.Config) ([]byte, error) {
+	out := piConfig{Providers: map[string]piProvider{}}
+	for _, p := range cfg.Providers {
+		if !isEnabled(p, "pi") {
+			continue
+		}
+		out.Providers[p.ID] = BuildProvider(p)
+	}
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal pi hsi config: %w", err)
+	}
+	return data, nil
 }
 
 // Validate checks the generated config.

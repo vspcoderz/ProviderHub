@@ -1,6 +1,20 @@
 package schema
 
-import "time"
+import (
+	"strings"
+	"time"
+)
+
+// AnthropicBase strips a trailing "/v1" from a base URL. Anthropic-protocol
+// tools (claude code, pi anthropic-messages) append their own "/v1/messages",
+// so a base that already ends in "/v1" would produce "/v1/v1/messages".
+func AnthropicBase(baseURL string) string {
+	trimmed := strings.TrimRight(baseURL, "/")
+	if strings.HasSuffix(trimmed, "/v1") {
+		return strings.TrimSuffix(trimmed, "/v1")
+	}
+	return trimmed
+}
 
 // Config is the top-level canonical config file.
 type Config struct {

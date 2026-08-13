@@ -93,8 +93,8 @@ func Generate(cfg *schema.Config, dryRun bool) (string, string, error) {
 
 		// Update or append
 		found := false
-		for i, profile := range existing.ProviderProfiles {
-			if profile.ID == profileID {
+		for i, existingProfile := range existing.ProviderProfiles {
+			if existingProfile.ID == profileID {
 				existing.ProviderProfiles[i] = profile
 				found = true
 				break

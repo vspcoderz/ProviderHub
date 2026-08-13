@@ -60,20 +60,7 @@ func Generate(cfg *schema.Config, dryRun bool) (string, string, error) {
 			continue // codex only supports openai responses api
 		}
 
-		entry := map[string]interface{}{
-			"name":     p.Name,
-			"base_url": p.BaseURL,
-		}
-		if p.APIKeyEnv != "" {
-			entry["env_key"] = p.APIKeyEnv
-		}
-		entry["wire_api"] = "responses"
-
-		if len(p.Headers) > 0 {
-			entry["http_headers"] = p.Headers
-		}
-
-		providers[p.ID] = entry
+		providers[p.ID] = BuildProviderEntry(p)
 		providersOrder = append(providersOrder, p.ID)
 	}
 
@@ -115,6 +102,53 @@ func Generate(cfg *schema.Config, dryRun bool) (string, string, error) {
 	}
 
 	return path, buf.String(), nil
+}
+
+// BuildProviderEntry returns the codex model_providers entry for a provider.
+func BuildProviderEntry(p schema.Provider) map[string]interface{} {
+	entry := map[string]interface{}{
+		"name":     p.Name,
+		"base_url": p.BaseURL,
+	}
+	if p.APIKeyEnv != "" {
+		entry["env_key"] = p.APIKeyEnv
+	}
+	entry["wire_api"] = "responses"
+
+	if len(p.Headers) > 0 {
+		entry["http_headers"] = p.Headers
+	}
+	return entry
+}
+
+// FreshConfig returns a standalone config.toml containing every codex-compatible
+// provider, with the given provider/model selected as default. Used by the hsi
+// harness wrappers so the real ~/.codex config stays untouched.
+func FreshConfig(cfg *schema.Config, defaultProviderID, defaultModelID string) ([]byte, error) {
+	providers := map[string]interface{}{}
+	for _, p := range cfg.Providers {
+		if reservedIDs[p.ID] {
+			continue
+		}
+		if !isEnabled(p, "codex") || !hasProtocol(p, "openai") {
+			continue
+		}
+		providers[p.ID] = BuildProviderEntry(p)
+	}
+
+	doc := map[string]interface{}{
+		"model":           defaultModelID,
+		"model_provider":  defaultProviderID,
+		"model_providers": providers,
+	}
+
+	var buf bytes.Buffer
+	enc := toml.NewEncoder(&buf)
+	enc.Indent = ""
+	if err := enc.Encode(doc); err != nil {
+		return nil, fmt.Errorf("encode codex hsi config: %w", err)
+	}
+	return buf.Bytes(), nil
 }
 
 // Validate checks the generated config by running `codex --help` (just parsing check).

@@ -81,7 +81,7 @@ func Generate(cfg *schema.Config, dryRun bool) (string, string, error) {
 
 		prov := hermesProvider{
 			Name:    p.Name,
-			API:     p.BaseURL + "/v1",
+			API:     p.BaseURL,
 			KeyEnv:  p.APIKeyEnv,
 			APIMode: resolveAPIMode(p),
 		}

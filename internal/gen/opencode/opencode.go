@@ -29,8 +29,9 @@ type ocProvider struct {
 }
 
 type ocOptions struct {
-	BaseURL string `json:"baseURL"`
-	APIKey  string `json:"apiKey,omitempty"`
+	BaseURL string            `json:"baseURL"`
+	APIKey  string            `json:"apiKey,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
 type ocModel struct {
@@ -89,38 +90,7 @@ func Generate(cfg *schema.Config, dryRun bool) (string, string, error) {
 			continue
 		}
 
-		prov := ocProvider{
-			NPM:  npmPackage(p),
-			Name: p.Name,
-			Options: ocOptions{
-				BaseURL: p.BaseURL,
-			},
-		}
-
-		if p.APIKeyEnv != "" {
-			// Check keystore first, fall back to env var
-			if storedKey, _ := keystore.Get(p.ID); storedKey != "" {
-				prov.Options.APIKey = storedKey
-			} else {
-				prov.Options.APIKey = "{env:" + p.APIKeyEnv + "}"
-			}
-		}
-
-		prov.Models = map[string]ocModel{}
-		for _, m := range p.Models {
-			om := ocModel{
-				Name: m.Name,
-			}
-			if m.ContextWindow > 0 || m.MaxOutput > 0 {
-				om.Limit = &ocLimit{
-					Context: m.ContextWindow,
-					Output:  m.MaxOutput,
-				}
-			}
-			prov.Models[m.ID] = om
-		}
-
-		existing.Provider[p.ID] = prov
+		existing.Provider[p.ID] = BuildProvider(p)
 	}
 
 	data, err := json.MarshalIndent(existing, "", "  ")
@@ -143,6 +113,60 @@ func Generate(cfg *schema.Config, dryRun bool) (string, string, error) {
 	}
 
 	return path, string(data), nil
+}
+
+// BuildProvider returns the opencode provider entry for a provider.
+func BuildProvider(p schema.Provider) ocProvider {
+	prov := ocProvider{
+		NPM:  npmPackage(p),
+		Name: p.Name,
+		Options: ocOptions{
+			BaseURL: p.BaseURL,
+		},
+	}
+
+	if p.APIKeyEnv != "" {
+		if storedKey, _ := keystore.Get(p.ID); storedKey != "" {
+			prov.Options.APIKey = storedKey
+		} else {
+			prov.Options.APIKey = "{env:" + p.APIKeyEnv + "}"
+		}
+	}
+	if len(p.Headers) > 0 {
+		prov.Options.Headers = p.Headers
+	}
+
+	prov.Models = map[string]ocModel{}
+	for _, m := range p.Models {
+		om := ocModel{Name: m.Name}
+		if m.ContextWindow > 0 || m.MaxOutput > 0 {
+			om.Limit = &ocLimit{Context: m.ContextWindow, Output: m.MaxOutput}
+		}
+		prov.Models[m.ID] = om
+	}
+	return prov
+}
+
+// FreshConfig returns a standalone opencode.json containing every opencode-enabled
+// provider, with the given provider/model selected as default. Used by the hsi
+// harness wrapper so the real ~/.config/opencode config stays untouched.
+func FreshConfig(cfg *schema.Config, defaultProviderID, defaultModelID string) ([]byte, error) {
+	out := ocConfig{
+		Schema:   "https://opencode.ai/config.json",
+		Provider: map[string]ocProvider{},
+		Model:    defaultProviderID + "/" + defaultModelID,
+	}
+	for _, p := range cfg.Providers {
+		if !isEnabled(p, "opencode") {
+			continue
+		}
+		out.Provider[p.ID] = BuildProvider(p)
+	}
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal opencode hsi config: %w", err)
+	}
+	return data, nil
 }
 
 // Validate checks the generated config.

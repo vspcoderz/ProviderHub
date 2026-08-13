@@ -14,7 +14,7 @@ func TestGenerate_Basic(t *testing.T) {
 		Version: 1,
 		Providers: []schema.Provider{
 			{
-				ID:        "agentrouter",
+				ID:        "test-agentrouter",
 				Name:      "AgentRouter",
 				BaseURL:   "https://agentrouter.org",
 				APIKeyEnv: "AGENTROUTER_API_KEY",
@@ -43,9 +43,9 @@ func TestGenerate_Basic(t *testing.T) {
 	if !ok {
 		t.Fatal("missing providers dict")
 	}
-	prov, ok := provs["agentrouter"].(map[string]interface{})
+	prov, ok := provs["test-agentrouter"].(map[string]interface{})
 	if !ok {
-		t.Fatal("missing agentrouter")
+		t.Fatal("missing test-agentrouter")
 	}
 	if prov["name"] != "AgentRouter" {
 		t.Errorf("name = %v", prov["name"])
