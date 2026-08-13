@@ -5,10 +5,26 @@ rem
 rem Usage:
 rem   install.bat                 install to %LOCALAPPDATA%\ProviderHub\bin
 rem   set PREFIX=D:\tools & install.bat   custom install dir
+rem   powershell -c "irm https://raw.githubusercontent.com/vspcoderz/ProviderHub/main/install.bat -OutFile %TEMP%\ph-install.bat; & %TEMP%\ph-install.bat"
 rem
 setlocal EnableDelayedExpansion
 
 set "ROOT=%~dp0"
+
+rem If no source tree (piped from the web), fetch the repo first.
+if not exist "%ROOT%go.mod" (
+  echo ==^> Fetching provider-hub source from https://github.com/vspcoderz/ProviderHub ^(main^)
+  where git >nul 2>nul
+  if errorlevel 1 (
+    echo git not found - install Git, or clone the repo and run install.bat. 1>&2
+    exit /b 1
+  )
+  set "TMP=%TEMP%\provider-hub-install"
+  if exist "%TEMP%\provider-hub-install" rmdir /s /q "%TEMP%\provider-hub-install"
+  git clone -q --depth 1 --branch main https://github.com/vspcoderz/ProviderHub.git "%TEMP%\provider-hub-install"
+  if errorlevel 1 exit /b 1
+  set "ROOT=%TEMP%\provider-hub-install\"
+)
 
 rem --- 1. Pick install dir ---------------------------------------------------
 if "%PREFIX%"=="" set "PREFIX=%LOCALAPPDATA%\ProviderHub"

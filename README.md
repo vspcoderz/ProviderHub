@@ -59,6 +59,20 @@ ph-claude                        # run Claude Code against your routers
 
 ## Install
 
+**One-liner:**
+
+```bash
+# Linux / macOS (bash)
+curl -fsSL https://raw.githubusercontent.com/vspcoderz/ProviderHub/main/install.sh | bash
+```
+
+```powershell
+# Windows (PowerShell) — needs Git
+powershell -c "irm https://raw.githubusercontent.com/vspcoderz/ProviderHub/main/install.bat -OutFile $env:TEMP\ph-install.bat; & $env:TEMP\ph-install.bat"
+```
+
+**From source:**
+
 ```bash
 git clone https://github.com/vspcoderz/ProviderHub.git
 cd provider-hub
@@ -214,7 +228,9 @@ them where each harness expects:
 
 `install.sh` (Linux/macOS) and `install.bat` (Windows) build the `ph` binary,
 install it to a bin directory, add it to `PATH`, and write the harness wrappers.
-Override the destination with `PREFIX` (e.g. `PREFIX="$HOME/tools" ./install.sh`).
+When piped from the web they fetch the source automatically, so the one-liners
+above work without cloning the repo. Override the destination with `PREFIX`
+(e.g. `PREFIX="$HOME/tools" ./install.sh`).
 
 ## Project layout
 

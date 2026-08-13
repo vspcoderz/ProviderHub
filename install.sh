@@ -3,12 +3,29 @@
 # Builds the ph binary and installs it, then writes the harness wrappers.
 #
 # Usage:
-#   ./install.sh                 # install to ~/.local/bin (user) or /usr/local/bin (root)
-#   PREFIX=$HOME/tools ./install.sh   # custom install dir
+#   ./install.sh                         # install to ~/.local/bin (user) or /usr/local/bin (root)
+#   PREFIX=$HOME/tools ./install.sh      # custom install dir
+#   curl -fsSL https://raw.githubusercontent.com/vspcoderz/ProviderHub/main/install.sh | bash
 #
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_URL="https://github.com/vspcoderz/ProviderHub"
+BRANCH="main"
+
+SRC0="${BASH_SOURCE[0]:-}"
+ROOT="$(cd "$(dirname "$SRC0")" 2>/dev/null && pwd)"
+# When piped via curl, dirname is "." — check whether this is a real checkout.
+if [ ! -f "$ROOT/go.mod" ]; then
+  TMP="$(mktemp -d)"
+  echo "==> Fetching provider-hub source from $REPO_URL ($BRANCH)"
+  if command -v git >/dev/null 2>&1; then
+    git clone -q --depth 1 --branch "$BRANCH" "$REPO_URL.git" "$TMP/src"
+  else
+    curl -fsSL "$REPO_URL/archive/refs/heads/$BRANCH.tar.gz" | tar -xz -C "$TMP"
+    mv "$TMP"/ProviderHub-"$BRANCH" "$TMP/src"
+  fi
+  ROOT="$TMP/src"
+fi
 
 # --- 1. Detect OS / arch -----------------------------------------------------
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
