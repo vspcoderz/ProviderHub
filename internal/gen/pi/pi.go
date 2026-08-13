@@ -36,8 +36,8 @@ type piModel struct {
 	Name          string       `json:"name"`
 	Reasoning     bool         `json:"reasoning"`
 	Input         []string     `json:"input"`
-	ContextWindow int          `json:"contextWindow"`
-	MaxTokens     int          `json:"maxTokens"`
+	ContextWindow int          `json:"contextWindow,omitempty"`
+	MaxTokens     int          `json:"maxTokens,omitempty"`
 	Cost          piModelCost  `json:"cost"`
 }
 
