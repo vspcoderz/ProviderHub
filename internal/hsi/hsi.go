@@ -303,6 +303,13 @@ func Run(toolName string, args []string) error {
 		// This keeps trust/permissions intact on the real ~/.codex config.
 		env = delEnv(env, "CODEX_HOME")
 		key := resolveKey(*provider)
+		if key == "" {
+			hint := fmt.Sprintf("ph key set %s", providerID)
+			if provider.APIKeyEnv != "" {
+				hint = fmt.Sprintf("set %s (or run ph key set %s)", provider.APIKeyEnv, providerID)
+			}
+			return fmt.Errorf("provider %q has no API key configured; %s", providerID, hint)
+		}
 		port, stop, err := startProxy(provider, key)
 		if err != nil {
 			return err
